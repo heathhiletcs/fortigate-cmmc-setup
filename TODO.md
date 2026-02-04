@@ -59,6 +59,10 @@
 - [x] Default route via 204.186.251.249 (wan1.847)
 - [x] DNS: 8.8.8.8, 8.8.4.4
 
+### Physical Ports
+- [x] internal1-5 ports enabled (hardware switch members)
+- [x] wan1 port enabled
+
 ---
 
 ## 🔄 CUTOVER PLAN - SonicWall to FortiGate
