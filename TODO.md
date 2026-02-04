@@ -1,5 +1,94 @@
 # FortiGate 60F - Production Deployment TODO List
 
+## Critical Priority - VPN Authentication
+
+### 0. Implement Azure AD Authentication for IPsec VPN
+**Status:** ⚠️ BLOCKER - VPN tunnel configured but authentication method needs implementation
+
+**Background:**
+- IPsec VPN tunnel fully configured and operational (CBS-VPN)
+- Phase 1 negotiation successful (IKEv1, Main Mode, AES256, SHA384, DH Group 15)
+- Phase 2 configured with PFS enabled (AES256, SHA256, DH Group 15)
+- Firewall policies created (VPN→Internet allowed, VPN→Internal blocked)
+- **Issue:** IPsec XAUTH cannot use Azure AD SAML authentication directly
+
+**Choose One Authentication Method:**
+
+#### Option A: Azure MFA NPS Extension + RADIUS (Recommended)
+**Cost:** Free (Microsoft-provided)
+**Requirements:**
+- Windows Server 2016+ (VM or physical)
+- Network Policy Server (NPS) role
+- Azure MFA NPS Extension
+
+**Steps:**
+- [ ] Provision Windows Server (evaluate existing servers or create VM)
+- [ ] Install NPS role on Windows Server
+- [ ] Download and install Azure MFA NPS Extension
+- [ ] Configure NPS RADIUS server
+  - Add FortiGate as RADIUS client
+  - Configure connection request policy
+  - Configure network policy for VPN-Users-Azure group
+- [ ] Configure FortiGate RADIUS settings:
+  ```bash
+  config user radius
+      edit "Azure-RADIUS"
+          set server "<NPS-server-IP>"
+          set secret "<shared-secret>"
+          set auth-type auto
+      next
+  end
+
+  config user group
+      edit "VPN-Users-RADIUS"
+          set member "Azure-RADIUS"
+      next
+  end
+
+  config vpn ipsec phase1-interface
+      edit "CBS-VPN"
+          set authusrgrp "VPN-Users-RADIUS"
+      next
+  end
+  ```
+- [ ] Test VPN connection with Azure AD credentials
+- [ ] Verify MFA enforcement
+- [ ] Document RADIUS configuration for CMMC compliance
+
+**Resources:**
+- [Microsoft: Azure MFA NPS Extension Installation](https://learn.microsoft.com/en-us/azure/active-directory/authentication/howto-mfa-nps-extension)
+- [FortiGate RADIUS Configuration](https://docs.fortinet.com/document/fortigate/7.4.0/administration-guide/891454/radius-servers)
+
+#### Option B: FortiAuthenticator
+**Cost:** Requires FortiAuthenticator license
+**Requirements:**
+- FortiAuthenticator VM or appliance
+- FortiAuthenticator license
+
+**Steps:**
+- [ ] Acquire FortiAuthenticator license
+- [ ] Deploy FortiAuthenticator VM
+- [ ] Configure Azure AD SSO integration
+- [ ] Configure RADIUS service
+- [ ] Configure FortiGate to use FortiAuthenticator RADIUS
+- [ ] Test VPN connection
+
+#### Option C: Azure AD Domain Services
+**Cost:** ~$110/month Azure subscription
+**Requirements:**
+- Azure AD DS enabled in Azure tenant
+- Azure subscription with sufficient permissions
+
+**Steps:**
+- [ ] Enable Azure AD Domain Services in Azure portal
+- [ ] Configure FortiGate LDAP settings
+- [ ] Test VPN connection
+
+**Decision Required By:** Next VPN configuration session
+**Impact:** VPN cannot be deployed to users until authentication is implemented
+
+---
+
 ## High Priority - Before Production Cutover
 
 ### 1. Configure Production WAN (VLAN 847)

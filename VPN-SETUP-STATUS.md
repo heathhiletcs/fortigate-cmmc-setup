@@ -1,22 +1,30 @@
-# FortiGate 60F - IPsec VPN with Azure AD SAML Setup
+# FortiGate 60F - IPsec VPN with Azure AD Authentication Setup
 
 **Start Date:** December 12, 2025
-**Status:** 🔄 IN PROGRESS
-**Completion:** ~70%
+**Last Updated:** December 15, 2025
+**Status:** 🔄 IN PROGRESS (Authentication Method Pending)
+**Completion:** ~85%
 
 ---
 
 ## Configuration Overview
 
-**VPN Type:** IPsec IKEv2 Dial-Up VPN (not SSL VPN)
-**Authentication:** Azure AD SAML with MFA enforcement
+**VPN Type:** IPsec IKEv1 Dial-Up VPN (XAUTH)
+**Authentication:** Azure AD via RADIUS (Planned - NPS Extension)
 **VPN Client:** FortiClient
 **Access Model:** Full tunnel - Internet only (no internal network access)
 **Target Users:** 1-10 users
 **Compliance:** CMMC Level 2 compliant
 
 ### Why IPsec Instead of SSL VPN?
-FortiOS 7.6+ removes SSL VPN support on FortiGate models with 2GB RAM or less. The FortiGate 60F has 2GB RAM, so we're implementing IPsec VPN with SAML authentication instead.
+**Fortinet removed SSL VPN support from FortiGate models with 2GB RAM or less starting in FortiOS 7.6.0.** The FortiGate 60F has 2GB RAM, making IPsec VPN the only long-term remote access solution for this hardware.
+
+**Reference:** [Fortinet Documentation - SSL VPN Removed from 2GB RAM Models](https://docs.fortinet.com/document/fortigate/7.6.1/fortios-release-notes/877104/ssl-vpn-removed-from-2gb-ram-models-for-tunnel-and-web-mode)
+
+### Current Firmware Status
+- **Current Version:** FortiOS 7.4.9 (SSL VPN still available)
+- **Future Limitation:** Upgrading to 7.6.0+ will remove SSL VPN entirely
+- **Solution:** IPsec VPN is the supported path forward
 
 ---
 
@@ -112,85 +120,99 @@ Remote Groups:
 
 ---
 
-### 🔄 Phase 3: IPsec VPN Configuration (IN PROGRESS)
+### ✅ Phase 3: IPsec VPN Configuration (COMPLETE - Pending Authentication)
 
-#### 3.1 VPN IP Pool (COMPLETE)
-Created via GUI: **Policy & Objects > Addresses > Create New**
+#### 3.1 VPN Tunnel Configuration
+**Tunnel Name:** CBS-VPN
+**Created via:** VPN Wizard → Custom Tunnel
+**Status:** ✅ Configured and operational (Phase 1 negotiation successful)
+
+#### 3.2 IPsec VPN Phase 1 Interface (COMPLETE)
+**Configuration (verified via `diagnose vpn ike config`):**
 
 ```
-Name: VPN-IP-Pool
-Type: IP Range
-IP Range: 10.255.1.10 - 10.255.1.250
-Interface: any
-Comment: IPsec VPN client address pool
-```
-
-**Rationale:** Using 10.255.1.0/24 subnet to avoid conflicts with internal networks (172.16.x.x)
-
-**Status:** ✅ Created successfully
-
-#### 3.2 IPsec VPN Phase 1 Interface (IN PROGRESS)
-Created via GUI: **VPN > IPsec Wizard**
-
-**Current Configuration:**
-```
-Name: Azure-VPN-IKEv2
-Template: Dialup User
-Remote Gateway: Dialup User
-Interface: wan1.847
-Mode Config: ✅ Enable
-
-Mode Config Settings:
-  IP Pools: VPN-IP-Pool (10.255.1.10-250)
-  DNS Server 1: 1.1.1.1
-
-Authentication:
-  Method: Signature
-  User Group: VPN-Users-Azure
-  IKE Version: 2
+Name: CBS-VPN
+Type: Dynamic (dialup)
+Interface: wan1.847 (204.186.251.250)
+IKE Version: 1
+Mode: Main (Identity Protection)
+Authentication: Pre-shared Key + XAUTH
+XAUTH Mode: Server-Auto
+XAUTH Group: VPN-Users-Azure
 
 Phase 1 Proposal:
   Encryption: AES256
   Authentication: SHA384
-  Diffie-Hellman Group: 15 (3072-bit MODP)
-  Key Lifetime: 86400 seconds
+  Diffie-Hellman Group: 15 (MODP3072)
+  Fragmentation: Enabled
+  Dead Peer Detection: On-demand, retry 3, interval 20s
+
+Mode Config:
+  IP Pool: 10.255.1.100 - 10.255.1.200
+  DNS Server: 1.1.1.1
 ```
 
-**Status:** ⚠️ Configuration created but showing errors (see Issues section)
+**Status:** ✅ Phase 1 negotiation successful with FortiClient
+- VPN tunnel accepts incoming connections
+- IKE proposals match correctly
+- Mode changed from Aggressive to Main (more secure)
+- DH Group 15 configured and verified
 
-#### 3.3 IPsec VPN Phase 2 Configuration (IN PROGRESS)
+#### 3.3 IPsec VPN Phase 2 Configuration (COMPLETE)
 
-**Current Configuration:**
+**Configuration:**
 ```
-Name: Azure-VPN-IKEv2 (auto-created)
-Phase 1: Azure-VPN-IKEv2
-
-Phase 2 Proposal:
-  Encryption: AES256
-  Authentication: SHA256
-  Diffie-Hellman Group: 15 (3072-bit MODP) - PFS enabled
-  Key Lifetime: 43200 seconds
-
-Advanced Settings:
-  Replay Detection: ✅ Enabled
-  Perfect Forward Secrecy: ✅ Enabled
-  Auto-negotiate: ✅ Enabled
+Name: CBS-VPN
+Phase 1: CBS-VPN
+Proposal: AES256-SHA256
+Diffie-Hellman Group: 15 (MODP3072)
+Perfect Forward Secrecy: Enabled
+Replay Detection: Enabled
 ```
 
-**Status:** ⚠️ Configuration created but pending Phase 1 issue resolution
+**Status:** ✅ Configured correctly
 
 ---
 
-### ⏳ Phase 4: Firewall Policies (PENDING)
+### ✅ Phase 4: Firewall Policies (COMPLETE)
 
-#### 4.1 BLOCK VPN to Internal Networks (NOT STARTED)
-**Planned Policy 19:** (Must be ABOVE internet policy)
+#### 4.1 VPN Zone Configuration
+Created zone "Internal-Networks" containing:
+- internal1.3 (IoT)
+- internal1.4 (CORP-LAN)
+- internal1.5 (CUI)
+- internal1.6 (Guest)
+- dmz
+
+**Status:** ✅ Zone created for policy management
+
+#### 4.2 VPN to Internet Access (Policy 17)
+**Auto-created by VPN Wizard, now ENABLED:**
 
 ```
+Policy ID: 17
+Name: CBS-VPN (auto-generated)
+Source Interface: CBS-VPN
+Destination Interface: wan1.847
+Source Address: all
+Destination Address: all
+Service: ALL
+Action: ACCEPT
+NAT: ✅ Enabled
+Logging: All traffic
+```
+
+**Status:** ✅ Enabled and operational
+
+#### 4.3 BLOCK VPN to Internal Networks (Policy 18)
+**Created manually:**
+
+```
+Policy ID: 18
 Name: BLOCK-VPN-to-Internal
-Source Interface: Azure-VPN-IKEv2
-Destination Interface: internal1.3, internal1.4, internal1.5, internal1.6, dmz
-Source Address: VPN-IP-Pool
+Source Interface: CBS-VPN
+Destination Interface: Internal-Networks (zone)
+Source Address: all
 Destination Address: all
 Service: ALL
 Action: DENY
@@ -198,57 +220,45 @@ Logging: All traffic
 Comment: CMMC L2: Block VPN access to internal networks
 ```
 
-**Purpose:** Enforce security requirement that VPN users cannot access internal corporate networks
-
-#### 4.2 VPN to Internet Access (NOT STARTED)
-**Planned Policy 20:**
-
-```
-Name: VPN-to-Internet
-Source Interface: Azure-VPN-IKEv2
-Destination Interface: wan1.847
-Source Address: VPN-IP-Pool
-Destination Address: all
-Service: ALL
-Action: ACCEPT
-NAT: ✅ Enable
-Logging: All traffic
-Comment: CMMC L2: IPsec VPN users internet access only
-```
-
-**Purpose:** Allow VPN users full tunnel internet access through FortiGate
+**Status:** ✅ Policy created and active
+**Purpose:** Enforce requirement that VPN users cannot access internal corporate networks
 
 ---
 
-### ⏳ Phase 5: FortiClient Configuration (PENDING)
+### ✅ Phase 5: FortiClient Configuration (COMPLETE - Tested)
 
-#### 5.1 FortiClient Installation (NOT STARTED)
-- [ ] Download FortiClient VPN (free version)
-- [ ] Install on test workstation
-- [ ] Prepare VPN profile for deployment
+#### 5.1 FortiClient Installation
+- ✅ FortiClient VPN installed on test workstation (Mac)
+- ✅ Connection profile created and tested
+- ✅ Phase 1 negotiation successful
 
-#### 5.2 VPN Profile Configuration (NOT STARTED)
-**Planned Configuration:**
+#### 5.2 VPN Profile Configuration (Current Working Config)
+**Tested Configuration:**
 
 ```
-Connection Name: Company VPN (Azure)
+Connection Name: CORE VPN
 VPN Type: IPsec VPN
-Remote Gateway: 204.186.251.250 (FortiGate WAN IP)
-Authentication Method: Single Sign-On (SAML)
-Pre-shared Key: [To be configured after Phase 1 completion]
-IKE Version: IKEv2
+Remote Gateway: remote.thecoresolution.com
+Authentication Method: Pre-shared Key + XAUTH
+Pre-shared Key: [Configured on FortiGate]
+IKE Version: IKEv1
 Mode Config: Enable
+Enable SSO: Disabled (SAML not compatible with IKEv1 XAUTH)
 
 Advanced Settings:
   Phase 1 Encryption: AES256
   Phase 1 Authentication: SHA384
-  Phase 1 DH Group: 15
+  Phase 1 DH Group: 15 (MODP3072)
   Phase 2 Encryption: AES256
   Phase 2 Authentication: SHA256
-  Phase 2 DH Group: 15
-  NAT Traversal: Enable
-  Dead Peer Detection: Enable
+  Phase 2 DH Group: 15 (MODP3072)
+  Phase 2 PFS: Enabled
+  NAT Traversal: Enabled
+  Dead Peer Detection: Enabled
 ```
+
+**Status:** ✅ Phase 1 negotiation successful
+**Issue:** XAUTH authentication requires username/password, but Azure AD SAML cannot authenticate via XAUTH protocol
 
 ---
 
@@ -299,7 +309,7 @@ diagnose debug disable
 
 ## Issues and Resolutions
 
-### Issue 1: Azure AD Certificate Import Failed ✅ RESOLVED
+### Issue 1: Azure AD Certificate Import Failed ✅ RESOLVED (Dec 12)
 **Symptom:** "CRL/certificate file doesn't have matched CA imported" error when importing Azure AD SAML certificate
 
 **Root Cause:**
@@ -307,76 +317,134 @@ diagnose debug disable
 - Azure AD default SAML certificates lack this extension
 - FIPS-CC mode is very strict about certificate validation
 
-**Attempts Made:**
-1. GUI certificate upload - FAILED
-2. CLI certificate paste - FAILED (character limit)
-3. Remote certificate import - FAILED (missing Basic Constraints)
-
 **Solution:**
 1. Created custom Root CA certificate with Basic Constraints extension using PowerShell
 2. Created SAML certificate signed by the custom CA
 3. Imported CA certificate to FortiGate first (Certificate > CA Certificate)
 4. Imported signed SAML certificate (Certificate > Remote Certificate)
 5. Uploaded custom certificate PFX to Azure AD enterprise application
-6. Both certificates imported successfully to FortiGate
 
-**Files Created:**
-- `C:\create-ca-and-saml-cert.ps1` - PowerShell script
-- `C:\fortigate-ca.cer` - Root CA
-- `C:\fortigate-saml-signed.cer` - SAML certificate for FortiGate
-- `C:\fortigate-saml-signed.pfx` - SAML certificate for Azure AD
-
-**Time to Resolve:** ~2 hours of troubleshooting + research
+**Time to Resolve:** ~2 hours
 
 ---
 
-### Issue 2: IPsec VPN Configuration via CLI Failed ✅ WORKAROUND
-**Symptom:** CLI commands for VPN Phase 1 configuration kept failing or reverting
+### Issue 2: SAML Configuration Using Internal IP ✅ RESOLVED (Dec 15)
+**Symptom:** "Failed to load SAML URL" error in FortiClient when attempting SSO
 
 **Root Cause:**
-- Copy/paste issues with complex multi-line CLI commands
-- Character encoding problems
-- Settings validation failing silently
+- SAML SP Address configured as `https://172.16.4.1:10443` (internal IP)
+- Port 10443 not accessible from internet
+- Remote VPN clients cannot reach SAML authentication endpoint before tunnel is established
 
-**Solution:**
-- Switched to GUI VPN wizard (VPN > IPsec Wizard)
-- More reliable for complex configuration
-- Better error feedback
+**Solution Attempted:**
+1. Updated FortiGate SAML SP Address to `https://remote.thecoresolution.com:10443`
+2. Updated Azure AD Reply URL to match public hostname
 
-**Status:** Using GUI successfully, but new issue emerged (see Issue 3)
+**Result:** Port 10443 still not accessible from internet (blocked/not forwarded)
+
+**Final Discovery:** IPsec IKEv1 XAUTH cannot use SAML SSO authentication (protocol incompatibility)
 
 ---
 
-### Issue 3: IPsec Phase 1 Error - "-1: Invalid length of value" ⚠️ ACTIVE
+### Issue 3: Phase 1 Proposal Mismatch - "no SA proposal chosen" ✅ RESOLVED (Dec 15)
+**Symptom:** VPN connection failing during Phase 1 negotiation with error "no SA proposal chosen"
+
+**Root Cause Analysis:**
+Multiple issues discovered and fixed:
+
+1. **Diffie-Hellman Group Missing:**
+   - FortiGate proposal: `aes256-sha384` (no DH group specified)
+   - FortiClient sending: DH Group 15 (MODP3072)
+   - Solution: Added `set dhgrp 15` to Phase 1 config
+
+2. **Mode Mismatch:**
+   - FortiGate configured: Aggressive Mode
+   - FortiClient sending: Main Mode (Identity Protection)
+   - Solution: Changed FortiGate to `set mode main`
+
+3. **Missing Firewall Policy:**
+   - Policy 17 (VPN-to-Internet) was created but disabled
+   - Error: "ignoring IKE request, no policy configured"
+   - Solution: Enabled Policy 17 with `set status enable`
+
+**Commands Used:**
+```bash
+config vpn ipsec phase1-interface
+    edit "CBS-VPN"
+        unset wizard-type
+        set dhgrp 15
+        set mode main
+    end
+
+config vpn ipsec phase2-interface
+    edit "CBS-VPN"
+        set pfs enable
+        set dhgrp 15
+    end
+
+config firewall policy
+    edit 17
+        set status enable
+    end
+```
+
+**Result:** ✅ Phase 1 negotiation now successful, proceeds to XAUTH authentication prompt
+
+**Time to Resolve:** ~4 hours of debugging
+
+---
+
+### Issue 4: XAUTH Cannot Authenticate Against Azure AD SAML ⚠️ ACTIVE BLOCKER
 **Symptom:**
-- VPN tunnel "Azure-VPN-IKEv2" created successfully
-- Red error message appears: "-1: Invalid length of value" (appears twice in GUI)
-- When editing Authentication section:
-  - IKEv1 shows pre-shared key field
-  - IKEv2 does NOT show pre-shared key field
+- Phase 1 negotiation successful
+- XAUTH prompts for username/password
+- Authentication fails with "username or password is not correct"
+- User credentials are valid in Azure AD
 
-**Current Status:** ⚠️ INVESTIGATING
+**Root Cause:** **FUNDAMENTAL PROTOCOL INCOMPATIBILITY**
 
-**Observations:**
-- VPN configuration appears in interface list
-- Most settings configured correctly
-- Phase 2 auto-created with correct settings
-- Error suggests missing or invalid value somewhere in configuration
+IPsec IKEv1 XAUTH is a simple username/password protocol that occurs within the IPsec tunnel negotiation. It cannot perform browser-based SAML authentication flows.
 
-**Possible Causes:**
-1. Pre-shared key requirement for IKEv2 dialup mode (even with SAML auth)
-2. Missing required field in IKEv2 configuration
-3. GUI bug or limitation with IKEv2 SAML configuration
-4. Additional authentication parameter required
+**Why SAML SSO Doesn't Work with IPsec XAUTH:**
+1. XAUTH expects username/password credentials
+2. SAML requires browser-based authentication with redirects
+3. FortiClient's "Enable SSO" tries to load SAML URL before VPN connects
+4. SAML endpoint (port 10443) must be accessible from internet for pre-authentication
+5. Even if port 10443 were open, XAUTH protocol cannot process SAML assertions
 
-**Next Steps to Investigate:**
-1. Check if IKEv1 is acceptable alternative for SAML-based VPN
-2. Verify if PSK is required even with SAML authentication
-3. Try configuring PSK via CLI for IKEv2
-4. Review FortiGate documentation for IKEv2 + SAML + dialup requirements
-5. Check if "authmethod" parameter needs adjustment
+**Evidence:**
+- FortiGate documentation indicates SSL VPN is the recommended method for SAML SSO
+- IPsec VPN with SAML requires complex workarounds or different authentication methods
+- XAUTH group "VPN-Users-Azure" expects SAML authentication, but XAUTH cannot use it
 
-**Status:** Paused for later investigation
+**Available Solutions:**
+
+1. **Azure MFA NPS Extension + RADIUS (Recommended)**
+   - Install free Microsoft Azure MFA NPS Extension on Windows Server
+   - Creates RADIUS server that authenticates against Azure AD with MFA
+   - Configure FortiGate to use RADIUS for XAUTH authentication
+   - Preserves Azure AD user management and MFA enforcement
+   - **Requirement:** Windows Server (physical or VM)
+
+2. **FortiAuthenticator**
+   - Virtual appliance acts as RADIUS proxy to Azure AD
+   - **Requirement:** FortiAuthenticator license
+
+3. **Azure AD Domain Services**
+   - Enables LDAP authentication against Azure AD
+   - Configure FortiGate for LDAP XAUTH
+   - **Requirement:** Azure AD DS subscription (paid)
+
+4. **Local Authentication (Not Acceptable)**
+   - Create local users on FortiGate
+   - Does not meet Azure AD integration requirement
+
+**Current Status:** ⚠️ BLOCKED - Waiting for decision on authentication method
+
+**References:**
+- [Fortinet SSL VPN Removal Documentation](https://docs.fortinet.com/document/fortigate/7.6.1/fortios-release-notes/877104/ssl-vpn-removed-from-2gb-ram-models-for-tunnel-and-web-mode)
+- FortiGate 60F (2GB RAM) cannot use SSL VPN in FortiOS 7.6+, forcing IPsec VPN
+- IPsec VPN + Azure AD requires RADIUS intermediary for authentication
 
 ---
 
@@ -559,34 +627,74 @@ config firewall policy
 
 ## Next Steps
 
-### Immediate (Resume Session)
-1. Investigate "-1: Invalid length of value" error on Azure-VPN-IKEv2
-2. Determine if IKEv1 is acceptable or if IKEv2 issue can be resolved
-3. Complete Phase 1 configuration without errors
-4. Verify Phase 2 configuration
-5. Create firewall policies 19 and 20
+### Critical Decision Required
+**Authentication Method for IPsec VPN:**
 
-### After VPN Configuration Complete
-1. Download and install FortiClient
-2. Create FortiClient VPN profile
-3. Test VPN connection with test user
-4. Validate MFA enforcement
-5. Verify connectivity restrictions
+The VPN tunnel is fully configured and Phase 1 negotiation is successful. However, Azure AD SAML authentication is incompatible with IPsec XAUTH protocol. Choose one of the following paths:
+
+**Option 1: Azure MFA NPS Extension + RADIUS (Recommended)**
+- Install Microsoft Azure MFA NPS Extension on Windows Server
+- Free solution, preserves Azure AD + MFA integration
+- Requirements: Windows Server 2016+ with Network Policy Server role
+- Estimated setup time: 2-3 hours
+- **Next Steps:**
+  1. Provision Windows Server (VM or physical)
+  2. Install NPS role
+  3. Install Azure MFA NPS Extension
+  4. Configure RADIUS on FortiGate to point to NPS server
+  5. Update Phase 1 to use RADIUS authentication instead of SAML group
+  6. Test VPN connection with Azure AD credentials + MFA
+
+**Option 2: FortiAuthenticator**
+- Requires FortiAuthenticator license and deployment
+- Acts as RADIUS proxy to Azure AD
+- **Next Steps:**
+  1. Acquire FortiAuthenticator license
+  2. Deploy FortiAuthenticator VM
+  3. Configure Azure AD integration
+  4. Configure RADIUS on FortiGate
+  5. Test VPN connection
+
+**Option 3: Azure AD Domain Services**
+- Paid Azure service (~$110/month)
+- Enables LDAP authentication
+- **Next Steps:**
+  1. Enable Azure AD DS in Azure subscription
+  2. Configure LDAP on FortiGate
+  3. Test VPN connection
+
+### After Authentication Method Implemented
+1. ✅ FortiClient profile already created and tested (Phase 1 works)
+2. Test complete VPN connection with Azure AD authentication
+3. Validate MFA enforcement
+4. Verify connectivity restrictions (VPN cannot access internal networks)
+5. Create FortiClient XML profile for distribution
 6. Document configuration for CMMC compliance
 7. Create configuration backup
 8. Deploy to production users (1-10 users)
+9. Disable temporary WAN management access (SSH/HTTPS on wan1.847)
 
 ---
 
-## Estimated Time Remaining
+## Current Configuration Status
 
-**Based on current progress:**
-- Phase 3 completion (resolve error + policies): 1-2 hours
-- Phase 4 (FortiClient setup): 30 minutes
-- Phase 5 (Testing): 1 hour
-- Phase 6 (Documentation): 30 minutes
+**What's Working:**
+- ✅ VPN tunnel configured (CBS-VPN)
+- ✅ Phase 1 negotiation successful (IKEv1, Main Mode, DH Group 15)
+- ✅ Phase 2 configured with PFS and DH Group 15
+- ✅ Firewall policies created (VPN→Internet allowed, VPN→Internal blocked)
+- ✅ FortiClient connects and reaches XAUTH authentication prompt
+- ✅ FIPS-CC mode maintained throughout
 
-**Total Estimated:** 3-4 hours remaining
+**What's Blocked:**
+- ⚠️ Authentication method (XAUTH cannot use Azure AD SAML)
+- Need RADIUS server for Azure AD integration
+
+**Estimated Time to Complete (after authentication decision):**
+- RADIUS setup: 2-3 hours
+- Testing and validation: 1 hour
+- Documentation: 30 minutes
+- **Total:** 3.5-4.5 hours
 
 ---
 
@@ -610,6 +718,6 @@ config firewall policy
 
 ---
 
-**Status:** Paused for investigation of IKEv2 configuration error
-**Last Updated:** December 12, 2025
-**Next Action:** Investigate PSK/authentication requirements for IKEv2 with SAML
+**Status:** VPN tunnel operational - Awaiting authentication method decision
+**Last Updated:** December 15, 2025
+**Next Action:** Choose authentication method (RADIUS/FortiAuthenticator/AAD DS) and implement
