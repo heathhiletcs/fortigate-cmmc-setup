@@ -1,7 +1,26 @@
-# FortiGate 60F - Production Deployment TODO List
+# FortiGate 60F - TODO List
 
-**Last Updated:** February 4, 2026
-**Status:** ✅ Configuration complete, ready for production cutover
+**Last Updated:** February 13, 2026
+**Status:** Production — operational and running
+
+---
+
+## Completed
+
+- [x] Configure Production WAN (wan1.847) - December 2025
+- [x] Resolve CORP-LAN subnet conflict - December 2025
+- [x] Physical connections (fiber to wan1, UniFi trunk to internal5) - December 2025
+- [x] Management access via CORP-LAN (172.16.4.1) - December 2025
+- [x] SonicWall cutover - December 2025
+- [x] Post-migration validation - all VLANs operational
+- [x] Native VLAN fix (192.168.168.168/24 on `internal` for UniFi mgmt) - January 2026
+- [x] VLAN 3 DHCP fix (disabled vci-match on DHCP server 2) - February 2026
+- [x] Hardened WAN interface (removed https/ssh from wan1.847, ping only) - February 2026
+- [x] ISP monitoring diagnosed — waiting on ISP to fix routing from 204.186.63.0/26
+- [x] Fixed DNS (was DoT with mismatched hostname, switched to cleartext) - February 2026
+- [x] FortiGuard connected and definitions updating - February 2026
+- [x] NTP configured via FortiGuard servers - February 2026
+- [x] FortiGate Cloud activated (free tier, US region) - February 2026
 
 ---
 
@@ -10,12 +29,12 @@
 ### Network Configuration (Matches SonicWall)
 | FortiGate Interface | IP Address | Purpose | Status |
 |---------------------|------------|---------|--------|
-| internal (untagged) | 192.168.168.168/24 | Default LAN / UniFi Management | ✅ Done |
-| internal.3 (VLAN 3) | 172.16.3.1/24 | IoT Network | ✅ Done |
-| internal.4 (VLAN 4) | 172.16.4.1/24 | CORP-LAN | ✅ Done |
-| internal.5 (VLAN 5) | 172.16.5.1/24 | Studio-LAN | ✅ Done |
-| internal.6 (VLAN 6) | 172.16.6.1/24 | Guest Network | ✅ Done |
-| wan1.847 | 204.186.251.250/30 | Fiber WAN | ✅ Done |
+| internal (untagged) | 192.168.168.168/24 | Default LAN / UniFi Management | Done |
+| internal.3 (VLAN 3) | 172.16.3.1/24 | IoT Network | Done |
+| internal.4 (VLAN 4) | 172.16.4.1/24 | CORP-LAN | Done |
+| internal.5 (VLAN 5) | 172.16.5.1/24 | Studio-LAN | Done |
+| internal.6 (VLAN 6) | 172.16.6.1/24 | Guest Network | Done |
+| wan1.847 | 204.186.251.250/30 | Fiber WAN | Done |
 
 ### CMMC Level 2 Security Settings
 - [x] FIPS-CC mode enabled
@@ -36,128 +55,112 @@
 
 ### Firewall Policies
 **Internet Access (Policies 1-5):**
-- [x] Management-to-Internet (internal → wan1.847)
-- [x] IoT-to-Internet (internal.3 → wan1.847)
-- [x] CORP-to-Internet (internal.4 → wan1.847)
-- [x] Studio-to-Internet (internal.5 → wan1.847)
-- [x] Guest-to-Internet (internal.6 → wan1.847)
+- [x] Management-to-Internet (internal -> wan1.847)
+- [x] IoT-to-Internet (internal.3 -> wan1.847)
+- [x] CORP-to-Internet (internal.4 -> wan1.847)
+- [x] Studio-to-Internet (internal.5 -> wan1.847)
+- [x] Guest-to-Internet (internal.6 -> wan1.847)
 
 **UniFi CloudKey Management (Policies 10-17):**
-- [x] CloudKey (192.168.168.30) → IoT, CORP, Studio, Guest
-- [x] All VLANs → CloudKey (for device inform)
+- [x] CloudKey (192.168.168.30) -> IoT, CORP, Studio, Guest
+- [x] All VLANs -> CloudKey (for device inform)
 - [x] Custom UniFi-Management service group (ports 8080, 8443, 8880, 8843, 6789, 3478/udp, 10001/udp)
 
 **Inter-VLAN Isolation (Policies 100-104):**
-- [x] DENY IoT → all other networks
-- [x] DENY CORP → all other networks
-- [x] DENY Studio → all other networks
-- [x] DENY Guest → all other networks
-- [x] DENY Management → all VLANs (except CloudKey allowed above)
+- [x] DENY IoT -> all other networks
+- [x] DENY CORP -> all other networks
+- [x] DENY Studio -> all other networks
+- [x] DENY Guest -> all other networks
+- [x] DENY Management -> all VLANs (except CloudKey allowed above)
 - [x] Logging enabled on all deny policies
 
 ### Routing
 - [x] Default route via 204.186.251.249 (wan1.847)
-- [x] DNS: 8.8.8.8, 8.8.4.4
-
-### Physical Ports
-- [x] internal1-5 ports enabled (hardware switch members)
-- [x] wan1 port enabled
+- [x] DNS: 8.8.8.8, 8.8.4.4 (cleartext)
 
 ---
 
-## 🔄 CUTOVER PLAN - SonicWall to FortiGate
+## Medium Priority - CMMC Compliance Requirements
 
-### Pre-Cutover Checklist
-- [ ] Schedule maintenance window (recommend off-hours)
-- [ ] Notify users of planned downtime
-- [ ] Backup SonicWall configuration
-- [ ] Backup FortiGate configuration (`execute backup config flash`)
-- [ ] Have SonicWall ready for quick rollback if needed
-- [ ] Test console/serial access to FortiGate
+### 1. Centralized Logging (CMMC 3.3.1, 3.3.2)
+- [x] FortiGate Cloud free tier activated (7-day retention)
+- [ ] Upgrade to paid FortiGate Cloud (1-year retention) OR set up syslog/FortiAnalyzer for 90+ day retention
+- [ ] Verify logs are being received and retained
+- [ ] Set up log review procedures
 
-### Physical Connections Required
-```
-ISP Fiber ──────► wan1 port (VLAN 847 tagged)
-UniFi Core Switch ──────► any internal port (1-5)
-                          └── Untagged: 192.168.168.x
-                          └── VLAN 3: 172.16.3.x (IoT)
-                          └── VLAN 4: 172.16.4.x (CORP)
-                          └── VLAN 5: 172.16.5.x (Studio)
-                          └── VLAN 6: 172.16.6.x (Guest)
-```
+### 2. Individual Admin Accounts (CMMC 3.1.1)
+- [ ] Create individual admin accounts (no shared admin account)
+- [ ] Disable or rename default "admin" account
+- [ ] Document who has admin access
+- [ ] Implement least privilege (use restricted profiles where appropriate)
 
-### Cutover Steps
-1. [ ] **Backup SonicWall** - Export current configuration
-2. [ ] **Power down SonicWall** - Disconnect from network
-3. [ ] **Connect FortiGate WAN** - Fiber/ISP to wan1 port
-4. [ ] **Connect FortiGate LAN** - UniFi switch trunk to any internal port (1-5)
-5. [ ] **Verify link lights** - wan1 and internal port should show link
-6. [ ] **Test from management network** (192.168.168.x):
-   - [ ] Ping 192.168.168.168 (FortiGate)
-   - [ ] Ping 8.8.8.8 (internet)
-   - [ ] Browse to https://192.168.168.168 (FortiGate GUI)
-7. [ ] **Test from each VLAN:**
-   - [ ] IoT (172.16.3.x) - ping gateway, ping internet
-   - [ ] CORP (172.16.4.x) - ping gateway, ping internet
-   - [ ] Studio (172.16.5.x) - ping gateway, ping internet
-   - [ ] Guest (172.16.6.x) - ping gateway, ping internet
-8. [ ] **Test UniFi CloudKey:**
-   - [ ] CloudKey can reach UniFi devices on all VLANs
-   - [ ] UniFi devices show as connected in controller
-9. [ ] **Verify VLAN isolation:**
-   - [ ] CORP cannot ping IoT
-   - [ ] Guest cannot ping CORP
-   - [ ] etc.
-
-### Rollback Plan
-If issues occur:
-1. Disconnect FortiGate
-2. Reconnect SonicWall
-3. Power on SonicWall
-4. Verify connectivity restored
-5. Troubleshoot FortiGate offline
-
----
-
-## ⚠️ POST-CUTOVER - Still Required
-
-### VPN Configuration (Not migrated yet)
-**Status:** VPN was configured on old FortiGate config but needs to be re-added after cutover verification
-
-- [ ] Configure CBS-VPN IPsec tunnel
-- [ ] Configure VPN IP pool (10.255.1.0/24)
-- [ ] Configure VPN firewall policies
-- [ ] Choose authentication method:
-  - Option A: Azure MFA NPS Extension + RADIUS (Recommended)
-  - Option B: FortiAuthenticator
-  - Option C: Azure AD Domain Services
-- [ ] Test VPN connectivity
-
-### CMMC Compliance Items (Medium Priority)
-
-#### Centralized Logging (CMMC 3.3.1, 3.3.2)
-- [ ] Set up syslog server OR FortiAnalyzer
-- [ ] Configure FortiGate to send logs
-- [ ] Verify log retention (90+ days required)
-
-#### Individual Admin Accounts (CMMC 3.1.1)
-- [ ] Create individual admin accounts
-- [ ] Disable/rename default "admin" account
-- [ ] Document admin access
-
-#### Multi-Factor Authentication (CMMC 3.5.3)
+### 3. Multi-Factor Authentication (CMMC 3.5.3)
+- [ ] Decide on MFA solution (FortiToken, RADIUS, or Azure AD)
 - [ ] Configure MFA for admin access
 - [ ] Test MFA login
+- [ ] Document MFA procedures for admins
 
-#### Configuration Backups (CMMC 3.9.1)
-- [ ] Set up automated backups
-- [ ] Test restore procedure
+### 4. Configuration Backups (CMMC 3.9.1)
+- [ ] Set up automated configuration backups
+- [ ] Store backups securely off-device
+- [ ] Test configuration restore procedure
+- [ ] Document backup schedule and retention
 
-### Documentation
-- [ ] Update network topology diagram
-- [ ] Document security controls for SSP
-- [ ] Create admin procedures document
-- [ ] Update incident response procedures
+### 5. NTP Configuration (CMMC 3.3.7) - DONE
+- [x] Configured NTP via FortiGuard servers
+- [x] Verified time synchronization (4 servers reachable)
+- [x] Documented NTP sources (ntp1/ntp2.fortiguard.com)
+
+### 6. System Security Plan Documentation
+- [ ] Document network topology
+- [ ] Document security controls implemented
+- [ ] Create data flow diagrams
+- [ ] Document access control procedures
+- [ ] Create incident response procedures
+- [ ] Document backup and recovery procedures
+- [ ] Prepare for C3PAO assessment
+
+---
+
+## Low Priority - Enhancements
+
+### 7. Firmware Upgrade
+- [ ] Upgrade from 7.4.9 to 7.4.11 (patches CVE-2026-24858)
+- [ ] Back up config via GUI before upgrading
+- [ ] Schedule during off-hours (causes brief outage)
+
+### 8. VPN Configuration (In Progress)
+- [ ] Resolve IKEv2 configuration error
+- [ ] Complete Azure AD SAML integration
+- [ ] Create firewall policies (block VPN to internal, allow VPN to Internet)
+- [ ] Configure FortiClient
+- [ ] Test VPN connection with MFA
+
+### 9. Advanced Security Features
+- [ ] Enable IPS (Intrusion Prevention System)
+- [ ] Configure IPS sensors for critical VLANs
+- [ ] Enable Application Control
+- [ ] Configure Web Filtering
+- [ ] Enable Antivirus scanning (if licensed)
+
+---
+
+## CMMC Assessment Preparation
+
+### 10. C3PAO Assessment Readiness
+- [ ] Review CMMC Level 2 requirements (110 practices)
+- [ ] Complete System Security Plan (SSP)
+- [ ] Document all security controls
+- [ ] Prepare evidence of implementation:
+  - Configuration exports
+  - Log samples
+  - Access control lists
+  - Password policy screenshots
+  - MFA configuration
+  - Backup procedures
+- [ ] Conduct internal assessment
+- [ ] Remediate any gaps
+- [ ] Schedule C3PAO assessment
 
 ---
 
@@ -167,27 +170,16 @@ If issues occur:
 - **Console:** COM port, 9600 baud, 8N1
 - **GUI:** https://192.168.168.168 (from management network)
 - **GUI:** https://172.16.4.1 (from CORP network)
-- **SSH:** ssh admin@192.168.168.168
+- **SSH:** ssh admin@172.16.4.1
 
 ### Common Commands
 ```bash
-# View interfaces
-get system interface
-
-# View firewall policies
-show firewall policy
-
-# View DHCP leases
-execute dhcp lease-list
-
-# View routing table
-get router info routing-table all
-
-# Backup config
-execute backup config flash
-
-# View active sessions
-get system session list
+show system interface              # View all interfaces
+show firewall policy               # View firewall policies
+show system dhcp server            # View DHCP servers
+get router info routing-table all  # View routing table
+execute dhcp lease-list            # View DHCP leases
+get system status                  # View system/FIPS status
 ```
 
 ### SonicWall to FortiGate Interface Mapping
@@ -199,8 +191,3 @@ get system session list
 | X0:V5 | internal.5 | 172.16.5.1/24 |
 | X0:V6 | internal.6 | 172.16.6.1/24 |
 | X1:V847 | wan1.847 | 204.186.251.250/30 |
-
----
-
-*Configuration completed: February 4, 2026*
-*Ready for production cutover*

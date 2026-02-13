@@ -46,10 +46,11 @@
 - UniFi switch will connect to any internal port (trunk with VLANs 3,4,5,6)
 
 **VLAN Details:**
-- internal1.3 (IoT Guest): 172.16.3.1/24, DHCP 100-200
-- internal1.4 (CORP-LAN): 172.16.4.1/24, DHCP 100-200
-- internal1.5 (Studio-LAN): 172.16.5.1/24, DHCP 100-200
-- internal1.6 (Guest Network): 172.16.6.1/24, DHCP 100-200
+- internal.3 (IoT Guest): 172.16.3.1/24, DHCP 100-200
+- internal.4 (CORP-LAN): 172.16.4.1/24, DHCP 100-200
+- internal.5 (Studio-LAN): 172.16.5.1/24, DHCP 100-200
+- internal.6 (Guest Network): 172.16.6.1/24, DHCP 100-200
+**Note:** Interface names are `internal.X` (not `internal1.X` as originally documented)
 
 **Management:**
 - Originally configured on DMZ port (192.168.99.1/24) for initial access
