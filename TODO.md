@@ -129,12 +129,45 @@
 - [ ] Back up config via GUI before upgrading
 - [ ] Schedule during off-hours (causes brief outage)
 
-### 8. VPN Configuration (In Progress)
-- [ ] Resolve IKEv2 configuration error
-- [ ] Complete Azure AD SAML integration
-- [ ] Create firewall policies (block VPN to internal, allow VPN to Internet)
-- [ ] Configure FortiClient
-- [ ] Test VPN connection with MFA
+### 8. VPN Configuration — IKEv2 + EAP with Azure AD SAML (In Progress)
+See VPN-SETUP-STATUS.md for full implementation guide.
+
+**Phase 1: Azure AD**
+- [ ] Reconfigure enterprise app SAML URLs to use `remote.thecoresolution.com`
+- [ ] Verify SAML claims (username, group) and user assignment
+- [ ] Verify Conditional Access policy (MFA enforced)
+
+**Phase 2: Certificates (FIPS-CC)**
+- [ ] Verify existing custom CA/SAML certs are still valid (or regenerate)
+- [ ] Ensure certs are imported on FortiGate (CA + Remote)
+
+**Phase 3: FortiGate SAML**
+- [ ] Configure/update SAML server (AzureAD-VPN) with new URLs
+- [ ] Configure user group (VPN-Users-Azure)
+- [ ] Set auth-ike-saml-port 10443
+- [ ] Bind ike-saml-server to wan1.847
+- [ ] Set auth-cert for VPN
+
+**Phase 4: IPsec Tunnel**
+- [ ] Delete old IKEv1 CBS-VPN tunnel and policies
+- [ ] Create IKEv2 Phase 1 with EAP enabled
+- [ ] Create Phase 2 with AES256-SHA256, DH15, PFS
+
+**Phase 5: Firewall Policies**
+- [ ] Create VPN-to-Internet ALLOW policy
+- [ ] Create BLOCK-VPN-to-Internal DENY policy
+- [ ] Verify policy order (ALLOW above DENY)
+
+**Phase 6: FortiClient**
+- [ ] Install FortiClient 7.2.4+ on test device
+- [ ] Create IKEv2 EAP VPN profile
+- [ ] Test full connection flow (SAML + MFA + tunnel)
+
+**Phase 7: Verification**
+- [ ] Verify IP assignment from 10.255.1.x pool
+- [ ] Verify internet access via VPN
+- [ ] Verify internal networks are blocked
+- [ ] Run diagnostic commands (ike gateway, tunnel list, samld debug)
 
 ### 9. Advanced Security Features
 - [ ] Enable IPS (Intrusion Prevention System)
