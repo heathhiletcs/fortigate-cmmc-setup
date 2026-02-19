@@ -1,6 +1,6 @@
 # FortiGate 60F - TODO List
 
-**Last Updated:** February 13, 2026
+**Last Updated:** February 18, 2026
 **Status:** Production — operational and running
 
 ---
@@ -124,50 +124,59 @@
 
 ## Low Priority - Enhancements
 
-### 7. Firmware Upgrade
-- [ ] Upgrade from 7.4.9 to 7.4.11 (patches CVE-2026-24858)
-- [ ] Back up config via GUI before upgrading
-- [ ] Schedule during off-hours (causes brief outage)
+### 7. Firmware Upgrade — DONE
+- [x] Upgraded from 7.4.9 to 7.4.11 build2878 (Mature) — patches CVE-2026-24858
 
-### 8. VPN Configuration — IKEv2 + EAP with Azure AD SAML (In Progress)
-See VPN-SETUP-STATUS.md for full implementation guide.
+### 8. VPN Configuration — IKEv2 + EAP with Azure AD SAML (BLOCKED)
+See VPN-SETUP-STATUS.md for full implementation guide and troubleshooting.
 
-**Phase 1: Azure AD**
-- [ ] Reconfigure enterprise app SAML URLs to use `remote.thecoresolution.com`
-- [ ] Verify SAML claims (username, group) and user assignment
-- [ ] Verify Conditional Access policy (MFA enforced)
+**Phase 1: Azure AD** — DONE
+- [x] Reconfigure enterprise app SAML URLs to use `remote.thecoresolution.com`
+- [x] Verify SAML claims (username, group) and user assignment
+- [x] Verify Conditional Access policy (MFA enforced)
 
-**Phase 2: Certificates (FIPS-CC)**
-- [ ] Verify existing custom CA/SAML certs are still valid (or regenerate)
-- [ ] Ensure certs are imported on FortiGate (CA + Remote)
+**Phase 2: Certificates (FIPS-CC)** — DONE (but may need revision)
+- [x] SAML CA + signing cert created and imported (CA_Cert_1, REMOTE_Cert_1)
+- [x] VPN CA + client cert created with SHA-256 (CA_Cert_3)
+- [ ] May need: Server cert with CN=remote.thecoresolution.com for FortiGate
+- [ ] May need: Client cert with EKU extensions (clientAuth, ipsecIKE)
 
-**Phase 3: FortiGate SAML**
-- [ ] Configure/update SAML server (AzureAD-VPN) with new URLs
-- [ ] Configure user group (VPN-Users-Azure)
-- [ ] Set auth-ike-saml-port 10443
-- [ ] Bind ike-saml-server to wan1.847
-- [ ] Set auth-cert for VPN
+**Phase 3: FortiGate SAML** — DONE
+- [x] Configure SAML server (AzureAD-VPN) with correct URLs
+- [x] Configure user group (VPN-Users-Azure)
+- [x] Set auth-ike-saml-port 10443
+- [x] Bind ike-saml-server to wan1.847
+- [x] Set auth-cert (Fortinet_Factory)
 
-**Phase 4: IPsec Tunnel**
-- [ ] Delete old IKEv1 CBS-VPN tunnel and policies
-- [ ] Create IKEv2 Phase 1 with EAP enabled
-- [ ] Create Phase 2 with AES256-SHA256, DH15, PFS
+**Phase 4: IPsec Tunnel** — DONE (config exists, tunnel won't come up)
+- [x] Delete old IKEv1 CBS-VPN tunnel and policies
+- [x] Create IKEv2 Phase 1 with EAP enabled
+- [x] Create Phase 2 with AES256-SHA256
+- [ ] Need to re-add `authusrgrp "VPN-Users-Azure"` (removed during debug)
 
-**Phase 5: Firewall Policies**
-- [ ] Create VPN-to-Internet ALLOW policy
-- [ ] Create BLOCK-VPN-to-Internal DENY policy
-- [ ] Verify policy order (ALLOW above DENY)
+**Phase 5: Firewall Policies** — DONE
+- [x] Create VPN-to-Internet ALLOW policy
+- [x] Create BLOCK-VPN-to-Internal DENY policy
+- [x] Verify policy order (ALLOW above DENY)
 
-**Phase 6: FortiClient**
-- [ ] Install FortiClient 7.2.4+ on test device
-- [ ] Create IKEv2 EAP VPN profile
-- [ ] Test full connection flow (SAML + MFA + tunnel)
+**Phase 6: FortiClient** — BLOCKED
+- [x] Install FortiClient 7.4.3 on test device
+- [x] Create IKEv2 VPN profile with SSO enabled
+- [x] SAML login works (Azure AD + MFA)
+- [ ] **BLOCKED:** "gw validation failed" — tunnel does not establish
 
-**Phase 7: Verification**
+**Phase 7: Verification** — BLOCKED (waiting on Phase 6)
 - [ ] Verify IP assignment from 10.255.1.x pool
 - [ ] Verify internet access via VPN
 - [ ] Verify internal networks are blocked
-- [ ] Run diagnostic commands (ike gateway, tunnel list, samld debug)
+
+**Next steps to fix "gw validation failed":**
+1. Generate FortiGate server cert with CN=remote.thecoresolution.com
+2. Import VPN CA to Windows Trusted Root CA store
+3. Re-add `authusrgrp "VPN-Users-Azure"` to phase1
+4. Regenerate client cert with EKU extensions
+5. Try `eap-cert-auth enable` on phase1
+6. Evaluate FortiClient EMS if all else fails
 
 ### 9. Advanced Security Features
 - [ ] Enable IPS (Intrusion Prevention System)
